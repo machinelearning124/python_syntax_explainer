@@ -211,6 +211,20 @@ def get_overall_explanation(model, code, user_inputs=None):
     
     try:
         response = model.generate_content(prompt)
-        return response.text
+        text = response.text
+        
+        # Clean up markdown formatting that might interfere with HTML
+        # Remove markdown code blocks if present
+        if text.startswith("```html"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        
+        # Ensure proper line breaks in HTML
+        text = text.strip()
+        
+        return text
     except Exception as e:
         return f"Error generating explanation: {e}"

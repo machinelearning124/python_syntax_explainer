@@ -219,6 +219,33 @@ def render_variables_section(step_data, prev_vars):
     st.markdown(blocks_html, unsafe_allow_html=True)
 
 
+def highlight_output_text(text):
+    """Highlight numbers, True/False/None, and quoted strings in output text."""
+    import re
+    import html
+    
+    # Escape HTML first
+    text = html.escape(text)
+    
+    # Highlight quoted strings first (yellow)
+    text = re.sub(r"'([^']*)'", r"<span style='color: #e6db74;'>'\1'</span>", text)
+    text = re.sub(r'"([^"]*)"', r'<span style="color: #e6db74;">"\1"</span>', text)
+    
+    # Highlight True (green)
+    text = re.sub(r'\b(True)\b', r'<span style="color: #a6e22e; font-weight: bold;">\1</span>', text)
+    
+    # Highlight False (red/pink)
+    text = re.sub(r'\b(False)\b', r'<span style="color: #f92672; font-weight: bold;">\1</span>', text)
+    
+    # Highlight None (purple)
+    text = re.sub(r'\b(None)\b', r'<span style="color: #ae81ff; font-weight: bold;">\1</span>', text)
+    
+    # Highlight numbers (cyan) - integers and floats
+    text = re.sub(r'\b(\d+\.?\d*)\b', r'<span style="color: #66d9ef;">\1</span>', text)
+    
+    return text
+
+
 def render_output_section(current_idx):
     """Render the Program Output section."""
     final_output = ""
@@ -320,7 +347,8 @@ def render_middle_row(step_data, prev_vars, current_idx):
     if final_output:
         final_output = re_module.sub(r'Enter[^:]*:\s*', '', final_output)
         final_output = final_output.strip()
-        output_content = f"<pre style='background: #2d2d2d; padding: 10px; border-radius: 5px; color: #a6e22e; font-family: monospace; margin: 0; overflow-x: auto;'>{final_output}</pre>"
+        highlighted_output = highlight_output_text(final_output)
+        output_content = f"<pre style='background: #2d2d2d; padding: 10px; border-radius: 5px; color: #d4d4d4; font-family: monospace; margin: 0; overflow-x: auto;'>{highlighted_output}</pre>"
     else:
         output_content = "<p style='color: #888;'>No output yet</p>"
     
@@ -366,8 +394,9 @@ def render_step_navigation(current_idx, total_steps):
         st.markdown(f"""
         <div style='display: flex; align-items: center; height: 40px;'>
             <span style='font-size: 1.1rem; color: #888; font-weight: bold;'>🎯 STEP NAVIGATOR</span>
-            <span style='margin-left: 10px; font-size: 1.5rem; color: #fafafa; font-weight: bold;'>{current_idx + 1}</span>
-            <span style='color: #666; font-size: 1.1rem;'> / {total_steps}</span>
+            <span style='margin-left: 10px; font-size: 1.5rem; color: #00c6ff; font-weight: bold;'>{current_idx + 1}</span>
+            <span style='color: #888; font-size: 1.1rem;'> / </span>
+            <span style='color: #fafafa; font-size: 1.3rem; font-weight: bold;'>{total_steps}</span>
         </div>
         """, unsafe_allow_html=True)
     
@@ -529,6 +558,136 @@ def extract_input_prompts(code):
             })
     return prompts
 
+def render_debug_code(code_lines, active_line_no, container_height=550):
+    """
+    Render code with Prism.js syntax highlighting and manual line numbers.
+    Uses line-by-line HTML structure for perfect alignment.
+    """
+    import html as html_module
+    
+    # Build HTML with each line as a separate div
+    html_lines = []
+    for i, line in enumerate(code_lines, 1):
+        escaped_line = html_module.escape(line) if line else " "  # Empty lines need a space
+        is_active = (i == active_line_no)
+        
+        active_class = " active-line" if is_active else ""
+        active_id = ' id="active-line"' if is_active else ""
+        
+        line_html = '<div class="code-line' + active_class + '"' + active_id + '>'
+        line_html += '<span class="line-num">' + str(i) + '</span>'
+        line_html += '<code class="language-python">' + escaped_line + '</code>'
+        line_html += '</div>'
+        html_lines.append(line_html)
+    
+    code_html = '\n'.join(html_lines)
+    
+    # Complete HTML with manual line numbers
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+        <style>
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            html, body {{
+                height: 100%;
+                overflow: hidden;
+                background-color: #2d2d2d;
+                font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            }}
+            #code-container {{
+                height: {container_height - 10}px;
+                overflow-y: auto;
+                overflow-x: auto;
+                background-color: #2d2d2d;
+                border-radius: 8px;
+                padding: 10px 0;
+            }}
+            .code-line {{
+                display: flex;
+                align-items: flex-start;
+                min-height: 21px;
+                line-height: 21px;
+            }}
+            .code-line:hover {{
+                background-color: #3a3a3a;
+            }}
+            .active-line {{
+                background-color: #264f78 !important;
+                border-left: 3px solid #00c6ff;
+            }}
+            .line-num {{
+                color: #858585;
+                min-width: 45px;
+                padding: 0 15px 0 10px;
+                text-align: right;
+                user-select: none;
+                flex-shrink: 0;
+                font-size: 14px;
+            }}
+            .code-line code {{
+                flex-grow: 1;
+                background: transparent !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                font-size: 14px !important;
+                font-family: 'Fira Code', 'Consolas', 'Monaco', monospace !important;
+                white-space: pre !important;
+            }}
+            /* Scrollbar styling */
+            #code-container::-webkit-scrollbar {{
+                width: 8px;
+                height: 8px;
+            }}
+            #code-container::-webkit-scrollbar-track {{
+                background: #2d2d2d;
+            }}
+            #code-container::-webkit-scrollbar-thumb {{
+                background: #555;
+                border-radius: 4px;
+            }}
+            #code-container::-webkit-scrollbar-thumb:hover {{
+                background: #777;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="code-container">
+            {code_html}
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {{
+                // Highlight each code element individually
+                document.querySelectorAll('.code-line code').forEach(function(el) {{
+                    Prism.highlightElement(el);
+                }});
+                
+                // Auto-scroll using manual scrollTop (prevents parent scroll)
+                setTimeout(function() {{
+                    const container = document.getElementById('code-container');
+                    const activeLine = document.getElementById('active-line');
+                    if (container && activeLine) {{
+                        const lineTop = activeLine.offsetTop;
+                        const containerHeight = container.clientHeight;
+                        const lineHeight = activeLine.offsetHeight;
+                        container.scrollTop = lineTop - (containerHeight / 2) + (lineHeight / 2);
+                    }}
+                }}, 100);
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    
+    return components.html(full_html, height=container_height, scrolling=False)
+
 with col1:
     st.subheader("📝 CODE")
     
@@ -562,9 +721,8 @@ with col1:
         code_to_display = '\n'.join(lines)
         
         
-        # Display code with st.code (has built-in syntax highlighting)
-
-        st.code(code_to_display, language="python", line_numbers=True, height=550)
+        # Display code with custom HTML component (auto-scrolls to active line)
+        render_debug_code(lines, line_no, container_height=550)
             
     else:
         # --- EDIT MODE (st_ace) ---
